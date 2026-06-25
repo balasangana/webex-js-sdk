@@ -1,3 +1,6 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import * as ts from 'typescript';
 import ApiAIAssistant from '../../../../src/services/ApiAiAssistant';
 import MetricsManager from '../../../../src/metrics/MetricsManager';
 import LoggerProxy from '../../../../src/logger-proxy';
@@ -11,6 +14,35 @@ describe('ApiAIAssistant', () => {
   let apiAIAssistant: ApiAIAssistant;
   let mockWebex: WebexSDK;
   let mockMetricsManager: jest.Mocked<MetricsManager>;
+
+  const getSuggestedResponseReturnType = () => {
+    const sourceFilePath = path.resolve(__dirname, '../../../../src/services/ApiAiAssistant.ts');
+    const sourceFile = ts.createSourceFile(
+      sourceFilePath,
+      fs.readFileSync(sourceFilePath, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true
+    );
+    let returnType: string | undefined;
+
+    const visit = (node: ts.Node) => {
+      if (
+        ts.isMethodDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.name.text === 'getSuggestedResponse'
+      ) {
+        returnType = node.type?.getText(sourceFile);
+
+        return;
+      }
+
+      ts.forEachChild(node, visit);
+    };
+
+    visit(sourceFile);
+
+    return returnType;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -282,5 +314,23 @@ describe('ApiAIAssistant', () => {
     expect(errorMessage).toBe('SUGGESTED_RESPONSES_NOT_ENABLED');
     expect(sendEventSpy).not.toHaveBeenCalled();
     expect(mockWebex.request).not.toHaveBeenCalled();
+  });
+
+  it('Q5 / spec 3,9: getSuggestedResponse resolves to a Record<string, unknown> return contract', async () => {
+    const responseBody: Record<string, unknown> = {
+      suggestion: 'Use the billing knowledge article',
+    };
+    const sendEventSpy = jest.spyOn(apiAIAssistant, 'sendEvent').mockResolvedValue(responseBody);
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    const result = await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+    });
+
+    expect(sendEventSpy).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(responseBody);
+    expect(result.suggestion).toBe('Use the billing knowledge article');
+    expect(getSuggestedResponseReturnType()).toBe('Promise<Record<string, unknown>>');
   });
 });
