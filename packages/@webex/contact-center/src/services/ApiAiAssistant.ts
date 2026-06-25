@@ -88,7 +88,9 @@ export class ApiAIAssistant {
     action?: TranscriptAction,
     context?: string,
     languageCode?: string,
-    trackingId?: string
+    trackingId?: string,
+    actionTimeStamp?: number,
+    conversationId?: string
   ): Promise<Record<string, unknown>> {
     LoggerProxy.info('Sending event', {
       module: CC_FILE,
@@ -116,9 +118,10 @@ export class ApiAIAssistant {
           eventDetails: {
             data: {
               interactionId,
+              conversationId,
               action,
               context,
-              actionTimeStamp: String(Date.now()),
+              actionTimeStamp: String(actionTimeStamp ?? Date.now()),
               languageCode,
               trackingId,
             },
@@ -159,7 +162,8 @@ export class ApiAIAssistant {
    * @public
    */
   public async getSuggestedResponse(params: SuggestedResponseParams): Promise<any> {
-    const {agentId, interactionId, context} = params;
+    const {agentId, interactionId, actionTimeStamp, context} = params;
+    const conversationId = interactionId;
     const trimmedContext = context?.trim();
     const languageCode = params.languageCode ?? 'en';
     const trackingId = `WX_CC_SDK_${uuidv4()}`;
@@ -184,12 +188,14 @@ export class ApiAIAssistant {
 
     try {
       if (!this.aiFeature?.suggestedResponses?.enable) {
-        const {error: detailedError} = getErrorDetails(
-          new Error('SUGGESTED_RESPONSES_NOT_ENABLED'),
-          METHODS.GET_SUGGESTED_RESPONSE,
-          CC_FILE
-        );
-        throw detailedError;
+        const notEnabledError = new Error('SUGGESTED_RESPONSES_NOT_ENABLED');
+        // Attach the failure shape getErrorDetails reads (error.details.data.reason)
+        // and throw raw — the outer catch runs getErrorDetails exactly once, which
+        // surfaces this sentinel as the caller-visible reason instead of the generic
+        // wrapper. (Wrapping here too would double-process and lose the sentinel.)
+        // @ts-ignore - augment with the failure shape getErrorDetails consumes
+        notEnabledError.details = {data: {reason: 'SUGGESTED_RESPONSES_NOT_ENABLED'}};
+        throw notEnabledError;
       }
 
       const orgId = this.webex.credentials.getOrgId();
@@ -202,7 +208,9 @@ export class ApiAIAssistant {
         undefined,
         trimmedContext,
         languageCode,
-        trackingId
+        trackingId,
+        actionTimeStamp,
+        conversationId
       );
 
       this.metricsManager.trackEvent(

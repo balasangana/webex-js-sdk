@@ -215,6 +215,72 @@ describe('ApiAIAssistant', () => {
       errorMessage = (error as Error)?.message || '';
     }
 
-    expect(errorMessage).toBe('Error while performing getSuggestedResponse');
+    expect(errorMessage).toBe('SUGGESTED_RESPONSES_NOT_ENABLED');
+    expect(mockWebex.request).not.toHaveBeenCalled();
+  });
+
+  it('AC-1 / spec 3,5,6: getSuggestedResponse forwards consumer actionTimeStamp into the request body', async () => {
+    (mockWebex.request as jest.Mock).mockResolvedValue({body: {ok: true}});
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+      actionTimeStamp: 1777479641173,
+    });
+
+    const requestArgs = (mockWebex.request as jest.Mock).mock.calls[0][0];
+    expect(requestArgs.body.eventDetails.data.actionTimeStamp).toBe('1777479641173');
+  });
+
+  it('AC-2 / spec 3,5,6: getSuggestedResponse derives conversationId from interactionId in the outbound payload', async () => {
+    (mockWebex.request as jest.Mock).mockResolvedValue({body: {ok: true}});
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+    });
+
+    const requestArgs = (mockWebex.request as jest.Mock).mock.calls[0][0];
+    expect(requestArgs.body.eventDetails.data.conversationId).toBe('interaction-1');
+  });
+
+  it('AC-1 / spec 7: getSuggestedResponse falls back to a generated timestamp when actionTimeStamp is omitted', async () => {
+    (mockWebex.request as jest.Mock).mockResolvedValue({body: {ok: true}});
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    const before = Date.now();
+    await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+    });
+    const after = Date.now();
+
+    const requestArgs = (mockWebex.request as jest.Mock).mock.calls[0][0];
+    const sent = Number(requestArgs.body.eventDetails.data.actionTimeStamp);
+    expect(Number.isNaN(sent)).toBe(false);
+    expect(sent).toBeGreaterThanOrEqual(before);
+    expect(sent).toBeLessThanOrEqual(after);
+  });
+
+  it('AC-4 / spec 7: getSuggestedResponse throws SUGGESTED_RESPONSES_NOT_ENABLED and skips sendEvent when disabled', async () => {
+    const sendEventSpy = jest.spyOn(apiAIAssistant, 'sendEvent');
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: false}} as any);
+
+    let errorMessage = '';
+    try {
+      await apiAIAssistant.getSuggestedResponse({
+        agentId: 'test-agent-id',
+        interactionId: 'interaction-1',
+        actionTimeStamp: 1777479641173,
+      });
+    } catch (error) {
+      errorMessage = (error as Error)?.message || '';
+    }
+
+    expect(errorMessage).toBe('SUGGESTED_RESPONSES_NOT_ENABLED');
+    expect(sendEventSpy).not.toHaveBeenCalled();
+    expect(mockWebex.request).not.toHaveBeenCalled();
   });
 });
