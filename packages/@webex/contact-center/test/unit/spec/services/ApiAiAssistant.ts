@@ -72,6 +72,57 @@ describe('ApiAIAssistant', () => {
     expect(result).toEqual({ok: true});
   });
 
+  it('AC-1 / AC-2 / spec 3,5,6: sendEvent writes consumer actionTimeStamp and conversationId into the request body', async () => {
+    const actionTimeStamp = 1777479641173;
+    (mockWebex.request as jest.Mock).mockResolvedValue({body: {ok: true}});
+
+    const result = await apiAIAssistant.sendEvent(
+      'test-agent-id',
+      'interaction-1',
+      'CUSTOM_EVENT',
+      'GET_SUGGESTIONS',
+      undefined,
+      undefined,
+      'en',
+      'WX_CC_SDK_tracking-id',
+      actionTimeStamp,
+      'interaction-1'
+    );
+
+    expect(mockWebex.request).toHaveBeenCalledTimes(1);
+    const requestArgs = (mockWebex.request as jest.Mock).mock.calls[0][0];
+
+    expect(requestArgs.body.eventDetails.data.interactionId).toBe('interaction-1');
+    expect(requestArgs.body.eventDetails.data.conversationId).toBe('interaction-1');
+    expect(requestArgs.body.eventDetails.data.actionTimeStamp).toBe(String(actionTimeStamp));
+    expect(result).toEqual({ok: true});
+  });
+
+  it('AC-1 boundary / spec 7: sendEvent falls back to Date.now when actionTimeStamp is omitted', async () => {
+    const fallbackActionTimeStamp = 1777479000000;
+    const dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(fallbackActionTimeStamp);
+    (mockWebex.request as jest.Mock).mockResolvedValue({body: {ok: true}});
+
+    const result = await apiAIAssistant.sendEvent(
+      'test-agent-id',
+      'interaction-1',
+      'CUSTOM_EVENT',
+      'GET_SUGGESTIONS',
+      undefined,
+      undefined,
+      'en',
+      'WX_CC_SDK_tracking-id'
+    );
+
+    const requestArgs = (mockWebex.request as jest.Mock).mock.calls[0][0];
+
+    expect(requestArgs.body.eventDetails.data.actionTimeStamp).toBe(
+      String(fallbackActionTimeStamp)
+    );
+    expect(result).toEqual({ok: true});
+    dateNowSpy.mockRestore();
+  });
+
   it('should fetch historic transcripts with mapped base URL', async () => {
     const responseBody = {interactionId: 'interaction-1', data: []};
     (mockWebex.request as jest.Mock).mockResolvedValue({body: responseBody});
@@ -92,7 +143,7 @@ describe('ApiAIAssistant', () => {
     expect(result).toEqual(responseBody as any);
   });
 
-  it('should request suggested response without extra context using sendEvent', async () => {
+  it('AC-3 / spec 3: getSuggestedResponse sends GET_SUGGESTIONS without extra context', async () => {
     const sendEventSpy = jest.spyOn(apiAIAssistant, 'sendEvent').mockResolvedValue({ok: true});
     apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
 
@@ -117,7 +168,42 @@ describe('ApiAIAssistant', () => {
     expect(result).toEqual({ok: true});
   });
 
-  it('should request suggested response with extra context using sendEvent', async () => {
+  it('AC-1 / spec 3,5,6: getSuggestedResponse forwards consumer actionTimeStamp into sendEvent', async () => {
+    const sendEventSpy = jest.spyOn(apiAIAssistant, 'sendEvent').mockResolvedValue({ok: true});
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    const actionTimeStamp = 1777479641173;
+
+    const result = await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+      actionTimeStamp,
+    });
+
+    expect(sendEventSpy).toHaveBeenCalledTimes(1);
+    const [, , , , , , , , forwardedActionTimeStamp] = sendEventSpy.mock.calls[0];
+
+    expect(forwardedActionTimeStamp).toBe(actionTimeStamp);
+    expect(result).toEqual({ok: true});
+  });
+
+  it('AC-2 / spec 3,5,6: getSuggestedResponse derives conversationId from interactionId in sendEvent', async () => {
+    const sendEventSpy = jest.spyOn(apiAIAssistant, 'sendEvent').mockResolvedValue({ok: true});
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    const result = await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+    });
+
+    expect(sendEventSpy).toHaveBeenCalledTimes(1);
+    const [, , , , , , , , , conversationId] = sendEventSpy.mock.calls[0];
+
+    expect(conversationId).toBe('interaction-1');
+    expect(result).toEqual({ok: true});
+  });
+
+  it('AC-3 / spec 3: getSuggestedResponse sends ADD_SUGGESTIONS_EXTRA_CONTEXT with extra context', async () => {
     const sendEventSpy = jest.spyOn(apiAIAssistant, 'sendEvent').mockResolvedValue({ok: true});
     apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
 
@@ -143,7 +229,7 @@ describe('ApiAIAssistant', () => {
     expect(result).toEqual({ok: true});
   });
 
-  it('should treat whitespace-only context as GET_SUGGESTIONS', async () => {
+  it('AC-3 / spec 3: getSuggestedResponse treats whitespace-only context as GET_SUGGESTIONS', async () => {
     const sendEventSpy = jest.spyOn(apiAIAssistant, 'sendEvent').mockResolvedValue({ok: true});
     apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
 
@@ -202,7 +288,8 @@ describe('ApiAIAssistant', () => {
     expect(errorMessage).toBe('Error while performing fetchHistoricTranscripts');
   });
 
-  it('should fail when suggested responses feature is disabled', async () => {
+  it('AC-4 / spec 7: getSuggestedResponse throws SUGGESTED_RESPONSES_NOT_ENABLED and skips sendEvent when disabled', async () => {
+    const sendEventSpy = jest.spyOn(apiAIAssistant, 'sendEvent');
     apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: false}} as any);
     let errorMessage = '';
 
@@ -215,6 +302,7 @@ describe('ApiAIAssistant', () => {
       errorMessage = (error as Error)?.message || '';
     }
 
-    expect(errorMessage).toBe('Error while performing getSuggestedResponse');
+    expect(errorMessage).toBe('SUGGESTED_RESPONSES_NOT_ENABLED');
+    expect(sendEventSpy).not.toHaveBeenCalled();
   });
 });
