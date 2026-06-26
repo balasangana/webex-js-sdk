@@ -1,3 +1,5 @@
+import * as path from 'path';
+import * as ts from 'typescript';
 import ApiAIAssistant from '../../../../src/services/ApiAiAssistant';
 import MetricsManager from '../../../../src/metrics/MetricsManager';
 import LoggerProxy from '../../../../src/logger-proxy';
@@ -249,5 +251,74 @@ describe('ApiAIAssistant', () => {
 
     expect(errorMessage).toBe('SUGGESTED_RESPONSES_NOT_ENABLED');
     expect(sendEventSpy).not.toHaveBeenCalled();
+  });
+
+  it('Q5 / spec 3,9: getSuggestedResponse resolves to a Record<string, unknown> return contract', async () => {
+    const packageRoot = path.resolve(__dirname, '../../../..');
+    const configPath = path.join(packageRoot, 'tsconfig.json');
+    const config = ts.readConfigFile(configPath, ts.sys.readFile);
+    const parsedConfig = ts.parseJsonConfigFileContent(config.config, ts.sys, packageRoot);
+    const virtualFile = path.join(
+      packageRoot,
+      'test/type-contracts/getSuggestedResponse.contract.ts'
+    );
+    const contractSource = `
+      import ApiAIAssistant from '../../src/services/ApiAiAssistant';
+
+      type AwaitedReturn = Awaited<ReturnType<ApiAIAssistant['getSuggestedResponse']>>;
+      type IsAny<T> = 0 extends (1 & T) ? true : false;
+      type Assert<T extends true> = T;
+      type AssertFalse<T extends false> = T;
+      type _NotAny = AssertFalse<IsAny<AwaitedReturn>>;
+      type _Record = Assert<AwaitedReturn extends Record<string, unknown> ? true : false>;
+
+      declare const result: AwaitedReturn;
+      const suggestionId: unknown = result['suggestionId'];
+      void suggestionId;
+    `;
+    const host = ts.createCompilerHost(parsedConfig.options);
+    const originalFileExists = host.fileExists.bind(host);
+    const originalReadFile = host.readFile.bind(host);
+    const originalGetSourceFile = host.getSourceFile.bind(host);
+    const isVirtualFile = (fileName: string) =>
+      path.normalize(fileName) === path.normalize(virtualFile);
+
+    host.fileExists = (fileName) => isVirtualFile(fileName) || originalFileExists(fileName);
+    host.readFile = (fileName) =>
+      isVirtualFile(fileName) ? contractSource : originalReadFile(fileName);
+    host.getSourceFile = (fileName, languageVersion, onError, shouldCreateNewSourceFile) => {
+      if (isVirtualFile(fileName)) {
+        return ts.createSourceFile(fileName, contractSource, languageVersion, true);
+      }
+
+      return originalGetSourceFile(fileName, languageVersion, onError, shouldCreateNewSourceFile);
+    };
+
+    const program = ts.createProgram(
+      [virtualFile],
+      {...parsedConfig.options, emitDeclarationOnly: false, noEmit: true},
+      host
+    );
+    const diagnostics = ts.getPreEmitDiagnostics(program);
+    const formattedDiagnostics = ts.formatDiagnosticsWithColorAndContext(diagnostics, {
+      getCanonicalFileName: (fileName) => fileName,
+      getCurrentDirectory: () => packageRoot,
+      getNewLine: () => '\n',
+    });
+
+    expect(formattedDiagnostics).toBe('');
+
+    const responseBody = {suggestionId: 'suggestion-1', text: 'Try confirming the billing date'};
+    (mockWebex.request as jest.Mock).mockResolvedValue({body: responseBody});
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    const result = await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+    });
+
+    const typedResult: Record<string, unknown> = result;
+
+    expect(typedResult.suggestionId).toBe('suggestion-1');
   });
 });
