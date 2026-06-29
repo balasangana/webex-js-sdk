@@ -88,7 +88,9 @@ export class ApiAIAssistant {
     action?: TranscriptAction,
     context?: string,
     languageCode?: string,
-    trackingId?: string
+    trackingId?: string,
+    actionTimeStamp?: number,
+    conversationId?: string
   ): Promise<Record<string, unknown>> {
     LoggerProxy.info('Sending event', {
       module: CC_FILE,
@@ -118,7 +120,8 @@ export class ApiAIAssistant {
               interactionId,
               action,
               context,
-              actionTimeStamp: String(Date.now()),
+              actionTimeStamp: String(actionTimeStamp ?? Date.now()),
+              ...(conversationId ? {conversationId} : {}),
               languageCode,
               trackingId,
             },
@@ -159,8 +162,9 @@ export class ApiAIAssistant {
    * @public
    */
   public async getSuggestedResponse(params: SuggestedResponseParams): Promise<any> {
-    const {agentId, interactionId, context} = params;
+    const {agentId, interactionId, actionTimeStamp, context} = params;
     const trimmedContext = context?.trim();
+    const conversationId = interactionId;
     const languageCode = params.languageCode ?? 'en';
     const trackingId = `WX_CC_SDK_${uuidv4()}`;
     const eventName = trimmedContext
@@ -202,7 +206,9 @@ export class ApiAIAssistant {
         undefined,
         trimmedContext,
         languageCode,
-        trackingId
+        trackingId,
+        actionTimeStamp,
+        conversationId
       );
 
       this.metricsManager.trackEvent(
