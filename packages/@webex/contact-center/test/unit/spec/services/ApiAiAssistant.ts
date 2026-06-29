@@ -4,6 +4,13 @@ import LoggerProxy from '../../../../src/logger-proxy';
 import WebexRequest from '../../../../src/services/core/WebexRequest';
 import {HTTP_METHODS, WebexSDK} from '../../../../src/types';
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type ExpectFalse<T extends false> = T;
+type SuggestedResponseReturn = Awaited<ReturnType<ApiAIAssistant['getSuggestedResponse']>>;
+type SuggestedResponseReturnIsNotAny = ExpectFalse<IsAny<SuggestedResponseReturn>>;
+
+const suggestedResponseReturnIsNotAny: SuggestedResponseReturnIsNotAny = false;
+
 jest.mock('../../../../src/metrics/MetricsManager');
 jest.mock('../../../../src/logger-proxy');
 
@@ -277,5 +284,20 @@ describe('ApiAIAssistant', () => {
 
     expect(errorMessage).toBe('Error while performing getSuggestedResponse');
     expect(sendEventSpy).not.toHaveBeenCalled();
+  });
+
+  it('Q5 / spec 3,9: getSuggestedResponse resolves to a Record<string, unknown> (not any)', async () => {
+    const responseBody: Record<string, unknown> = {suggestions: ['hello']};
+    jest.spyOn(apiAIAssistant, 'sendEvent').mockResolvedValue(responseBody);
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    const result: Record<string, unknown> = await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+    });
+
+    expect(result).toEqual(responseBody);
+    expect(result.suggestions).toEqual(['hello']);
+    expect(suggestedResponseReturnIsNotAny).toBe(false);
   });
 });
