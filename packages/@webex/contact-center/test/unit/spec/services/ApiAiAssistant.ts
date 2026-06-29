@@ -7,6 +7,14 @@ import {HTTP_METHODS, WebexSDK} from '../../../../src/types';
 jest.mock('../../../../src/metrics/MetricsManager');
 jest.mock('../../../../src/logger-proxy');
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type ExpectTrue<T extends true> = T;
+type SuggestedResponseReturn = Awaited<
+  ReturnType<ApiAIAssistant['getSuggestedResponse']>
+>;
+type SuggestedResponseReturnIsTyped = IsAny<SuggestedResponseReturn> extends false ? true : false;
+type _SuggestedResponseReturnIsNotAny = ExpectTrue<SuggestedResponseReturnIsTyped>;
+
 describe('ApiAIAssistant', () => {
   let apiAIAssistant: ApiAIAssistant;
   let mockWebex: WebexSDK;
@@ -201,6 +209,21 @@ describe('ApiAIAssistant', () => {
 
     expect(conversationId).toBe('interaction-1');
     expect(result).toEqual({ok: true});
+  });
+
+  it('Q5 / spec 3,9: getSuggestedResponse resolves to a Record<string, unknown>', async () => {
+    const sendEventSpy = jest
+      .spyOn(apiAIAssistant, 'sendEvent')
+      .mockResolvedValue({suggestion: 'Use account settings'});
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    const result: Record<string, unknown> = await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+    });
+
+    expect(sendEventSpy).toHaveBeenCalledTimes(1);
+    expect(result.suggestion).toBe('Use account settings');
   });
 
   it('AC-3 / spec 3: getSuggestedResponse sends ADD_SUGGESTIONS_EXTRA_CONTEXT with extra context', async () => {
