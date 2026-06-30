@@ -7,6 +7,17 @@ import {HTTP_METHODS, WebexSDK} from '../../../../src/types';
 jest.mock('../../../../src/metrics/MetricsManager');
 jest.mock('../../../../src/logger-proxy');
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type ExpectFalse<T extends false> = T;
+type ExpectTrue<T extends true> = T;
+type SuggestedResponseResult = Awaited<
+  ReturnType<ApiAIAssistant['getSuggestedResponse']>
+>;
+type SuggestedResponseIsNotAny = ExpectFalse<IsAny<SuggestedResponseResult>>;
+type SuggestedResponseIsRecord = ExpectTrue<
+  SuggestedResponseResult extends Record<string, unknown> ? true : false
+>;
+
 describe('ApiAIAssistant', () => {
   let apiAIAssistant: ApiAIAssistant;
   let mockWebex: WebexSDK;
