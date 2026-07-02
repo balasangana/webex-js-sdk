@@ -1,3 +1,7 @@
+import fs from 'fs';
+import path from 'path';
+import ts from 'typescript';
+
 import ApiAIAssistant from '../../../../src/services/ApiAiAssistant';
 import MetricsManager from '../../../../src/metrics/MetricsManager';
 import LoggerProxy from '../../../../src/logger-proxy';
@@ -6,6 +10,29 @@ import {HTTP_METHODS, WebexSDK} from '../../../../src/types';
 
 jest.mock('../../../../src/metrics/MetricsManager');
 jest.mock('../../../../src/logger-proxy');
+
+const getGetSuggestedResponseReturnType = () => {
+  const sourcePath = path.join(__dirname, '../../../../src/services/ApiAiAssistant.ts');
+  const sourceText = fs.readFileSync(sourcePath, 'utf8');
+  const sourceFile = ts.createSourceFile(sourcePath, sourceText, ts.ScriptTarget.Latest, true);
+  let returnType = '';
+
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isMethodDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'getSuggestedResponse'
+    ) {
+      returnType = node.type?.getText(sourceFile) ?? '';
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+
+  return returnType;
+};
 
 describe('ApiAIAssistant', () => {
   let apiAIAssistant: ApiAIAssistant;
@@ -202,6 +229,20 @@ describe('ApiAIAssistant', () => {
       String(fallbackActionTimeStamp)
     );
     expect(result).toEqual({ok: true});
+  });
+
+  it('Q5 / spec 3,9: getSuggestedResponse resolves to Record<string, unknown> (not any)', async () => {
+    const responseBody = {suggestionId: 'suggestion-1'};
+    (mockWebex.request as jest.Mock).mockResolvedValue({body: responseBody});
+    apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
+
+    const result = await apiAIAssistant.getSuggestedResponse({
+      agentId: 'test-agent-id',
+      interactionId: 'interaction-1',
+    });
+
+    expect(getGetSuggestedResponseReturnType()).toBe('Promise<Record<string, unknown>>');
+    expect(result.suggestionId).toBe('suggestion-1');
   });
 
   it('should treat whitespace-only context as GET_SUGGESTIONS', async () => {
