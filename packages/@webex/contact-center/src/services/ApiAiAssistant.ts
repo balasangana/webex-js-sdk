@@ -88,7 +88,9 @@ export class ApiAIAssistant {
     action?: TranscriptAction,
     context?: string,
     languageCode?: string,
-    trackingId?: string
+    trackingId?: string,
+    actionTimeStamp?: number,
+    conversationId?: string
   ): Promise<Record<string, unknown>> {
     LoggerProxy.info('Sending event', {
       module: CC_FILE,
@@ -116,9 +118,10 @@ export class ApiAIAssistant {
           eventDetails: {
             data: {
               interactionId,
+              conversationId,
               action,
               context,
-              actionTimeStamp: String(Date.now()),
+              actionTimeStamp: String(actionTimeStamp ?? Date.now()),
               languageCode,
               trackingId,
             },
@@ -159,7 +162,8 @@ export class ApiAIAssistant {
    * @public
    */
   public async getSuggestedResponse(params: SuggestedResponseParams): Promise<any> {
-    const {agentId, interactionId, context} = params;
+    const {agentId, interactionId, actionTimeStamp, context} = params;
+    const conversationId = interactionId;
     const trimmedContext = context?.trim();
     const languageCode = params.languageCode ?? 'en';
     const trackingId = `WX_CC_SDK_${uuidv4()}`;
@@ -184,12 +188,15 @@ export class ApiAIAssistant {
 
     try {
       if (!this.aiFeature?.suggestedResponses?.enable) {
-        const {error: detailedError} = getErrorDetails(
-          new Error('SUGGESTED_RESPONSES_NOT_ENABLED'),
-          METHODS.GET_SUGGESTED_RESPONSE,
-          CC_FILE
-        );
-        throw detailedError;
+        const featureDisabledError = new Error('SUGGESTED_RESPONSES_NOT_ENABLED') as Error & {
+          details: {data: {reason: string}};
+        };
+        featureDisabledError.details = {
+          data: {
+            reason: 'SUGGESTED_RESPONSES_NOT_ENABLED',
+          },
+        };
+        throw featureDisabledError;
       }
 
       const orgId = this.webex.credentials.getOrgId();
@@ -202,7 +209,9 @@ export class ApiAIAssistant {
         undefined,
         trimmedContext,
         languageCode,
-        trackingId
+        trackingId,
+        actionTimeStamp,
+        conversationId
       );
 
       this.metricsManager.trackEvent(
