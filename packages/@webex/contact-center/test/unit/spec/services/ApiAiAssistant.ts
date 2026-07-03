@@ -4,6 +4,17 @@ import LoggerProxy from '../../../../src/logger-proxy';
 import WebexRequest from '../../../../src/services/core/WebexRequest';
 import {HTTP_METHODS, WebexSDK} from '../../../../src/types';
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type ExpectFalse<T extends false> = T;
+type SuggestedResponseResult = Awaited<
+  ReturnType<ApiAIAssistant['getSuggestedResponse']>
+>;
+type SuggestedResponseIsAny = IsAny<SuggestedResponseResult>;
+
+// Q5 / spec sections 3, 5, 8: getSuggestedResponse must not resolve to any.
+const suggestedResponseReturnTypeCheck: ExpectFalse<SuggestedResponseIsAny> = false;
+void suggestedResponseReturnTypeCheck;
+
 jest.mock('../../../../src/metrics/MetricsManager');
 jest.mock('../../../../src/logger-proxy');
 

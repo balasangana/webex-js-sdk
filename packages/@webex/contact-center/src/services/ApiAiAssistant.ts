@@ -160,10 +160,12 @@ export class ApiAIAssistant {
    * Requests a suggested response for an interaction.
    *
    * @param params - Suggestion request parameters
-   * @returns HTTP response body from the AI Assistant event API
+   * @returns AI Assistant event API response body
    * @public
    */
-  public async getSuggestedResponse(params: SuggestedResponseParams): Promise<any> {
+  public async getSuggestedResponse(
+    params: SuggestedResponseParams
+  ): Promise<Record<string, unknown>> {
     const {agentId, interactionId, actionTimeStamp, context} = params;
     const trimmedContext = context?.trim();
     const languageCode = params.languageCode ?? 'en';
@@ -319,5 +321,14 @@ export class ApiAIAssistant {
     }
   }
 }
+
+type SuggestedResponseReturnTypeIsAny = 0 extends 1 &
+  Awaited<ReturnType<ApiAIAssistant['getSuggestedResponse']>>
+  ? true
+  : false;
+type AssertSuggestedResponseReturnTypeIsNotAny<T extends false> = T;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- Compile-time guard against Promise<any> regression.
+type _SuggestedResponseReturnTypeCheck =
+  AssertSuggestedResponseReturnTypeIsNotAny<SuggestedResponseReturnTypeIsAny>;
 
 export default ApiAIAssistant;
