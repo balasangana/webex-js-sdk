@@ -863,8 +863,6 @@ export type SuggestedResponseParams = {
   agentId: string;
   /** Interaction identifier for which suggestion should be generated */
   interactionId: string;
-  /** Optional action timestamp to forward to AI Assistant. Defaults to Date.now(). */
-  actionTimeStamp?: number;
   /** Optional additional context that should refine the suggestion */
   context?: string;
   /** Optional language code for suggestions (for example, 'en'). Defaults to 'en'. */
