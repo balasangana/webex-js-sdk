@@ -79,6 +79,11 @@ export class ApiAIAssistant {
    * @param eventType - the type of event (e.g. 'CUSTOM_EVENT')
    * @param eventName - the name of the event (e.g. 'GET_TRANSCRIPTS')
    * @param action - action within eventDetails (e.g. 'START' or 'STOP')
+   * @param context - optional context for suggestion requests
+   * @param languageCode - optional language code for suggestion requests
+   * @param trackingId - optional SDK tracking identifier
+   * @param actionTimeStamp - optional action timestamp to forward to AI Assistant
+   * @param conversationId - optional conversation identifier for the event payload
    */
   public async sendEvent(
     agentId: string,
@@ -88,7 +93,9 @@ export class ApiAIAssistant {
     action?: TranscriptAction,
     context?: string,
     languageCode?: string,
-    trackingId?: string
+    trackingId?: string,
+    actionTimeStamp?: number,
+    conversationId?: string
   ): Promise<Record<string, unknown>> {
     LoggerProxy.info('Sending event', {
       module: CC_FILE,
@@ -116,9 +123,10 @@ export class ApiAIAssistant {
           eventDetails: {
             data: {
               interactionId,
+              conversationId,
               action,
               context,
-              actionTimeStamp: String(Date.now()),
+              actionTimeStamp: String(actionTimeStamp ?? Date.now()),
               languageCode,
               trackingId,
             },
@@ -159,10 +167,11 @@ export class ApiAIAssistant {
    * @public
    */
   public async getSuggestedResponse(params: SuggestedResponseParams): Promise<any> {
-    const {agentId, interactionId, context} = params;
+    const {agentId, interactionId, actionTimeStamp, context} = params;
     const trimmedContext = context?.trim();
     const languageCode = params.languageCode ?? 'en';
     const trackingId = `WX_CC_SDK_${uuidv4()}`;
+    const conversationId = interactionId;
     const eventName = trimmedContext
       ? AIAssistantEventName.ADD_SUGGESTIONS_EXTRA_CONTEXT
       : AIAssistantEventName.GET_SUGGESTIONS;
@@ -202,7 +211,9 @@ export class ApiAIAssistant {
         undefined,
         trimmedContext,
         languageCode,
-        trackingId
+        trackingId,
+        actionTimeStamp,
+        conversationId
       );
 
       this.metricsManager.trackEvent(
