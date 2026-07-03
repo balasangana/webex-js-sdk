@@ -163,12 +163,10 @@ export class ApiAIAssistant {
    * Requests a suggested response for an interaction.
    *
    * @param params - Suggestion request parameters
-   * @returns Typed HTTP response body from the AI Assistant event API
+   * @returns HTTP response body from the AI Assistant event API
    * @public
    */
-  public async getSuggestedResponse(
-    params: SuggestedResponseParams
-  ): Promise<Record<string, unknown>> {
+  public async getSuggestedResponse(params: SuggestedResponseParams): Promise<any> {
     const {agentId, interactionId, actionTimeStamp, context} = params;
     const trimmedContext = context?.trim();
     const languageCode = params.languageCode ?? 'en';

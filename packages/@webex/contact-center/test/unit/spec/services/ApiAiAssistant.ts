@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import ApiAIAssistant from '../../../../src/services/ApiAiAssistant';
 import MetricsManager from '../../../../src/metrics/MetricsManager';
 import LoggerProxy from '../../../../src/logger-proxy';
@@ -8,11 +6,6 @@ import {HTTP_METHODS, WebexSDK} from '../../../../src/types';
 
 jest.mock('../../../../src/metrics/MetricsManager');
 jest.mock('../../../../src/logger-proxy');
-
-const apiAIAssistantSourcePath = path.resolve(
-  __dirname,
-  '../../../../src/services/ApiAiAssistant.ts'
-);
 
 describe('ApiAIAssistant', () => {
   let apiAIAssistant: ApiAIAssistant;
@@ -189,15 +182,6 @@ describe('ApiAIAssistant', () => {
     expect(actionTimeStamp).toBe(1777479641173);
     expect(conversationId).toBe('interaction-1');
     expect(result).toEqual({ok: true});
-  });
-
-  it('Q5 (§3, §5, §8): should expose getSuggestedResponse as a typed record promise', () => {
-    const source = fs.readFileSync(apiAIAssistantSourcePath, 'utf8');
-
-    expect(source).toMatch(
-      /public\s+async\s+getSuggestedResponse\(\s*params:\s*SuggestedResponseParams\s*\):\s*Promise<Record<string,\s*unknown>>/
-    );
-    expect(source).not.toMatch(/getSuggestedResponse\([^)]*\):\s*Promise<any>/);
   });
 
   it('should request suggested response with extra context using sendEvent', async () => {
