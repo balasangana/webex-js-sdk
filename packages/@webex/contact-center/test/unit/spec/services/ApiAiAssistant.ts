@@ -177,6 +177,21 @@ describe('ApiAIAssistant', () => {
     expect(requestArgs.body.eventDetails.data.conversationId).toBe('interaction-1');
   });
 
+  it('Q5: getSuggestedResponse return type is not any (spec sections 3, 5, 8)', () => {
+    type IsAny<T> = 0 extends 1 & T ? true : false;
+    type AssertTrue<T extends true> = T;
+    type SuggestedResponseBody = Awaited<ReturnType<ApiAIAssistant['getSuggestedResponse']>>;
+
+    const notAnyCheck: AssertTrue<IsAny<SuggestedResponseBody> extends false ? true : false> =
+      true;
+    const recordCheck: AssertTrue<
+      SuggestedResponseBody extends Record<string, unknown> ? true : false
+    > = true;
+
+    expect(notAnyCheck).toBe(true);
+    expect(recordCheck).toBe(true);
+  });
+
   it('should treat whitespace-only context as GET_SUGGESTIONS', async () => {
     const sendEventSpy = jest.spyOn(apiAIAssistant, 'sendEvent').mockResolvedValue({ok: true});
     apiAIAssistant.setAIFeatureFlags({suggestedResponses: {enable: true}} as any);
